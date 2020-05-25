@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Lisk Network Monitor by MrV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js" crossorigin="anonymous"></script>-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js" crossorigin="anonymous"></script>
+
+
+  </head>
+  <body>
+    <section class="page-header" style="margin:0;padding:25px;">
+      <h1 class="project-name">Ardor Network Monitor</h1>
+      <h2 class="project-tagline">Real time network monitoring!!</h2>
+      <button id="pauseButton" class="btn">Pause</button>
+    </section>
+
+    <section class="container">
+      <h1 class="text-center"><span id="health">0</span>% of network in sync with height <span id="height"></span></h1>
+      <h1 class="text-center"><span id="healthVersion">0</span>% of network up to date at v<span id="version"></span></h1>
+      <h1 class="text-center">Network subset of <span id="netSize"></span> nodes</h1>
+      <div class="col-lg-12"><br></div>
+      <!--<canvas id="barChart" class="col-lg-6" width="400" height="200"></canvas>-->
+      <!--<canvas id="lineChart" class="col-lg-6" width="400" height="200"></canvas>-->
+      <div class="row">
+      	<div  class="col-lg-8 col-md-offset-2">
+      		<canvas id="barChart"></canvas>
+      	</div>
+      </div>
+
+	  <div class="row">
+		  <div class="col-lg-12">
+			  <table class="table table-bordered">
+				<thead>
+					<tr>
+						<th>IP</th>
+						<th>Height</th>
+						<th>Version</th>
+					</tr>
+				</thead>
+				<tbody id="peersTable">
+				</tbody>
+			  </table>
+		  </div>
+		  <div id="peers" class="col-lg-12">
+
+		  </div>
+	  </div>
+      <footer class="site-footer">
+        <span class="site-footer-owner"> maintained by <a href="https://github.com/mrv777">MrV</a> </span>
+
+      </footer>
+
+    </section>
+
+    <script>
+      //hostname="https://testnet.liskwallet.net"
+      //hostname="http://lisktools.io:8000"
+      var paused=false;
+      var first=true;
+      $.ajaxSetup({timeout:750}); //in milliseconds
+      //var hostnameArray = ["https://lisk.liskwallet.io", "https://wallet.lisknode.io", "https://01.lskwallet.space", "https://liskwallet.punkrock.me"];
+      var hostnameArray = ["https://node2.ardor.tools","https://node5.ardor.tools","https://node7.ardor.tools"];
+      window.chartdata=[];
+      window.chartlabels=[];
+      window.syncdata=[];
+      //window.chartheights=[];
+      //window.charttime=[];
+      //window.charttime.push("");
+      //window.chartheights.push(0);
+      $(window).ready(function(){
+        ticker();
+      });
+      
+      $("#pauseButton").click(function () {
+		if (paused==false){
+			paused=true;
+			$("#pauseButton").text("Play");
+		}
+		else {
+			paused=false;
+			$("#pauseButton").text("Pause");
+			ticker();
+		}
+	  });
+
+      function ticker(){
+        setTimeout(function(){
+          displayPeers();
+          checkPeers();
+        },100);
+        if (paused==false){
+			setTimeout(function(){
+			  ticker();
+			},3500);
+		}
+      }
+      function checkPeers(){
+        window.syncdata=[];
+        var tempArrayForIndex = [];
+        var tempIndex = 0;
+        for (let index = 0; index < hostnameArray.length; ++index) {
+    			$.get(hostnameArray[index] + "/nxt?requestType=getPeers&state=CONNECTED&includePeerInfo=true&service=API").success(function(data){
+    			  JSON.parse(data)['peers'].forEach(function(peer){
+              $.get("http://" + peer.address + "/nxt?requestType=getBlocks&firstIndex=0&lastIndex=0").success(function(dataBlock){
+                let blockHeight = JSON.parse(data)['blocks'][0]['height'];
+      			  	if (peer.version!=null){
+        					var data2 = {
+        						"ip": peer.address,
+        						"version": peer.version,
+        						"height": blockHeight
+        						}
+        					var arrayIndex = peer.address.replace(/\./g, "");//remove period from ip address
+        					if(typeof(tempArrayForIndex[arrayIndex]) != "undefined" && tempArrayForIndex[arrayIndex] !== null) {
+        						if (window.syncdata[tempArrayForIndex[arrayIndex]].height<blockHeight){ //If another peer saw it more recently update the entry
+        							window.syncdata[tempArrayForIndex[arrayIndex]]=data2;
+        						}
+        					}
+        					else {
+        						window.syncdata.push(data2);
+        						tempArrayForIndex[arrayIndex]=tempIndex;
+        						tempIndex++;
+        					}
+        				}
+              });
+    			  });
+    			});
+    		}
+      }
+
+
+      function chartPeers(){
+        var data = {
+            labels: window.chartlabels,
+            datasets: [
+                {
+                    label: "Network Heights",
+					borderWidth: 1,
+                    data: window.chartdata
+                }
+            ]
+        };
+        Chart.defaults.global.tooltips.enabled = false;
+        Chart.defaults.bar.backgroundColor = 'rgba(255, 99, 132, 0.5)';
+        var ctx = $("#barChart");
+		
+        window.myBarChart = new Chart(ctx, {
+			type: 'bar',
+			data: data,
+			options: {
+        		animation: false,
+        		showTooltips:false,
+        		responsive:true,
+        		legend: {
+					display: false
+				},
+        		scales: {
+				   yAxes: [{
+					   ticks: {
+						   min: 0,
+						   max: 100,
+						   callback: function(value) {
+							   return value + "%"
+						   }
+					   },
+					   scaleLabel: {
+						   display: true,
+						   labelString: "Percentage"
+					   }
+				   }]
+				}
+        	}
+		});
+
+        
+
+        /*data = {
+            labels: window.charttime,
+            datasets: [
+                {
+                    label: "My First dataset",
+                    fillColor: "rgba(220,220,220,0.2)",
+                    strokeColor: "rgba(220,220,220,1)",
+                    pointColor: "rgba(220,220,220,1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(220,220,220,1)",
+                    data: window.chartheights
+                }
+            ]
+        };
+
+        ctx = $("#lineChart").get(0).getContext("2d");
+        var myLineChart = new Chart(ctx).Line(data, { scaleShowGridLines : false, pointDot : false,showTooltips:false,animation: false});*/
+      }
+
+      function displayPeers(){
+        window.chartlabels=[];
+        window.chartdata=[];
+        var height=10000000000;
+        var highestHeight=0;
+        var health=0;
+        var version="2.2.6";
+        var numVersion=0;
+        var first=true;
+        var count=-1;
+        $("#peers").html("");
+        $("#peersTable").html("");
+        window.syncdata=window.syncdata.sort(function(a,b){
+          return b.height-a.height
+        });
+        for(var i in window.syncdata){
+          var versionColor=heightColor="background-color:rgba(255,99,132,1)";
+          var sync=window.syncdata[i];
+          if(sync.height<height){
+            window.chartlabels.push(sync.height);
+            window.chartdata.push(0);
+            count=window.chartdata.length-1;
+            //$("#peers").append("<h2>"+sync.height+"</h2>");
+            if(first&&(health>1)){
+              first=false;
+              highestHeight=sync.height;
+            }
+            if(first){
+              $("#height").html(sync.height);
+            }
+            height=sync.height;
+          }
+          if(highestHeight-sync.height<4){
+            health++;
+            heightColor="background-color:rgba(75, 192, 192, 1)";
+          }
+          if (sync.version==version){
+          	numVersion++;
+          	versionColor="background-color:rgba(75, 192, 192, 1)";
+          }
+          window.chartdata[count]=window.chartdata[count]+1;
+
+          //$("#peers").append("<b>"+sync.ip+"</b> "+sync.version+" | ");
+          $("#peersTable").append("<tr><td>"+sync.ip+"</td><td style='"+heightColor+"'>"+sync.height+"</td><td style='"+versionColor+"'>"+sync.version+"</td></tr>");
+        }
+        for (let index = 0; index < window.chartdata.length; ++index) {
+        	window.chartdata[index]=((window.chartdata[index])/window.syncdata.length)*100
+        }
+        
+        $("#health").html((health*100/window.syncdata.length).toFixed(0));
+        $("#version").html(version);
+        $("#netSize").html(window.syncdata.length);
+        $("#healthVersion").html((numVersion*100/window.syncdata.length).toFixed(0));
+        //window.charttime.push("");
+        //window.chartheights.push((health*100/window.syncdata.length));
+        if (first==true){
+        	chartPeers();
+        	first=false;
+        }
+        else{
+        	window.myBarChart.data.datasets[0].data=window.chartdata;
+        	window.myBarChart.data.labels=window.chartlabels;
+        	
+        	var labelCount=window.myBarChart.data.labels.length;
+        	var backgroundColorArray = new Array(labelCount);
+        	var borderColorArray = new Array(labelCount);
+        	for (let index = 0; index < labelCount; ++index) {
+        		if (index<4){
+        			backgroundColorArray[index]='rgba(75, 192, 192, 0.5)';
+        			borderColorArray[index]='rgba(75, 192, 192, 1)';
+        		}
+        		else{
+        			backgroundColorArray[index]='rgba(255, 99, 132, 0.5)';
+        			borderColorArray[index]='rgba(255,99,132,1)';
+        		}
+        	}
+        	window.myBarChart.data.datasets[0].backgroundColor=backgroundColorArray;
+        	window.myBarChart.data.datasets[0].borderColor=borderColorArray;
+        	
+        	window.myBarChart.update();
+        }
+      }
+
+
+    </script>
+
+  </body>
+</html>
